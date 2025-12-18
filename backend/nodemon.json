@@ -1,0 +1,12 @@
+{
+    "watch": [
+        "."
+    ],
+    "ext": "js,ts",
+    "ignore": [
+        "**/*.spec.js",
+        "node_modules",
+        "dist"
+    ],
+    "exec": "ts-node-dev index.ts"
+}
