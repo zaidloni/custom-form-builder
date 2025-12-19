@@ -387,5 +387,5 @@ A1, A3          ✗ Gap in columns (missing A2)
 
 ## License
 
-ISC
+MIT
 
