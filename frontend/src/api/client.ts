@@ -3,6 +3,7 @@ import type {
   ListFormsResponse,
   RenderFormResponse,
   CreateFormResponse,
+  GenerateFormResponse,
   SubmitFormResponse,
   SubmissionsResponse,
   FormField,
@@ -114,6 +115,12 @@ export const formsApi = {
       params: { ...params, export: true },
       responseType: 'blob',
     })
+    return response.data
+  },
+
+  // Generate a form using AI
+  generateForm: async (prompt: string): Promise<GenerateFormResponse> => {
+    const response = await api.post<GenerateFormResponse>('/api/v1/forms/generate', { prompt })
     return response.data
   },
 }

@@ -387,5 +387,31 @@ export const listSubmissionsSchema = {
     },
 };
 
+// Generate form schema (AI-powered)
+export const generateFormSchema = {
+    body: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['prompt'],
+        properties: {
+            prompt: { type: 'string', minLength: 10, maxLength: 1000 },
+        },
+    },
+    response: {
+        201: {
+            type: 'object',
+            required: ['status', 'formId', 'version', 'url', 'name'],
+            properties: {
+                status: { type: 'boolean', const: true },
+                formId: { type: 'string' },
+                version: { type: 'number' },
+                url: { type: 'string' },
+                name: { type: 'string' },
+            },
+        },
+        ...errorResponses,
+    },
+};
+
 // Keep backward compatibility with old name
 export const formSchema = createFormSchema;

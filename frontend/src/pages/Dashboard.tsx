@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { formsApi } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { useToast } from '@/components/ui/toast'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 import { copyToClipboard, formatDate } from '@/lib/utils'
 import {
   Plus,
@@ -18,14 +27,41 @@ import {
   BarChart3,
   Edit,
   FileText,
+  Sparkles,
 } from 'lucide-react'
 import type { FormListItem } from '@/types/form'
 
 export default function Dashboard() {
   const { userEmail } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { addToast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+
+  const handleGenerateForm = async () => {
+    if (!aiPrompt.trim() || aiPrompt.length < 10) {
+      addToast('Please enter a more detailed description (at least 10 characters)', 'error')
+      return
+    }
+
+    setIsGenerating(true)
+    try {
+      const result = await formsApi.generateForm(aiPrompt)
+      addToast(`Form "${result.name}" created successfully!`, 'success')
+      setAiDialogOpen(false)
+      setAiPrompt('')
+      queryClient.invalidateQueries({ queryKey: ['forms'] })
+      // Navigate to edit the newly created form
+      navigate(`/forms/${result.formId}/edit`)
+    } catch (err: any) {
+      addToast(err.message || 'Failed to generate form', 'error')
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['forms', userEmail],
@@ -79,10 +115,16 @@ export default function Dashboard() {
             Create and manage your forms
           </p>
         </div>
-        <Button onClick={() => navigate('/forms/new')} className="gap-2">
-          <Plus className="w-4 h-4" />
-          Create Form
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setAiDialogOpen(true)} className="gap-2">
+            <Sparkles className="w-4 h-4" />
+            Create with AI
+          </Button>
+          <Button onClick={() => navigate('/forms/new')} className="gap-2">
+            <Plus className="w-4 h-4" />
+            Create Form
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -176,6 +218,66 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* AI Generate Dialog */}
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              Create Form with AI
+            </DialogTitle>
+            <DialogDescription>
+              Describe the form you want to create and AI will generate it for you.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="ai-prompt">Describe your form</Label>
+              <Textarea
+                id="ai-prompt"
+                placeholder="e.g., Create a job application form with fields for name, email, phone, resume upload, years of experience, and a cover letter..."
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={4}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Be specific about the fields you need and any validation requirements.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAiDialogOpen(false)
+                  setAiPrompt('')
+                }}
+                disabled={isGenerating}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGenerateForm}
+                disabled={isGenerating || aiPrompt.length < 10}
+                className="gap-2"
+              >
+                {isGenerating ? (
+                  <>
+                    <Spinner size="sm" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Generate Form
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

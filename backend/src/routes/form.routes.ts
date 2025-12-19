@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { nanoid } from 'nanoid';
 import { v4 as uuidv4 } from 'uuid';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { authorize } from '../middlewares/authorize';
 import {
   createFormSchema,
@@ -9,6 +10,7 @@ import {
   renderFormSchema,
   submitFormSchema,
   listSubmissionsSchema,
+  generateFormSchema,
 } from '../schemas/form.schema';
 import FormDefinition from '../db/models/formDefinition';
 import Submission from '../db/models/submission';
@@ -18,7 +20,6 @@ import { generateUrlHash } from '../utils/urlHash';
 import { generateCSV } from '../utils/csvExporter';
 
 const DOMAIN = process.env.APP_DOMAIN || 'http://localhost:5173';
-
 interface FormBody {
   name: string;
   description: string;
@@ -40,6 +41,47 @@ interface SubmissionQuery {
   page?: number;
   limit?: number;
 }
+
+interface GenerateFormBody {
+  prompt: string;
+}
+
+// Initialize Gemini AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+// Optimized prompt template for form generation
+const FORM_GENERATION_PROMPT = `Generate a JSON form definition. Rules:
+- Fields: single-line-text, textarea, number, email, dropdown, checkbox, date
+- Position format: Row(A-Z) + Column(1-4), e.g., A1, A2, B1
+- Rows must be contiguous starting from A
+- Columns per row must start at 1 and be contiguous
+- Maximum 4 columns per row
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "name": "Form Name",
+  "description": "Brief description",
+  "fields": [
+    {
+      "label": "Field Label",
+      "fieldType": "single-line-text",
+      "required": true,
+      "position": "A1",
+      "placeholder": "optional placeholder",
+      "helpText": "optional help text",
+      "validation": { "minLength": 1, "maxLength": 100 }
+    }
+  ]
+}
+
+Validation rules by type:
+- single-line-text/textarea: { "minLength": number, "maxLength": number }
+- number: { "min": number, "max": number }
+- email: { "emailPolicy": "any" }
+- dropdown: add "options": ["opt1", "opt2"] array to field
+- checkbox/date: no validation needed
+
+User request: `;
 
 export async function formRoutes(fastify: FastifyInstance) {
   /**
@@ -101,6 +143,134 @@ export async function formRoutes(fastify: FastifyInstance) {
       }
     }
   );
+
+  /**
+   * ─────────────────────────────────────────
+   * POST /api/v1/forms/generate - Generate form using AI
+   * ─────────────────────────────────────────
+   */
+
+    fastify.post<{ Body: GenerateFormBody }>(
+      '/api/v1/forms/generate',
+      {
+        preHandler: [authorize],
+        schema: generateFormSchema,
+      },
+      async (req, reply) => {
+        try {
+          const { prompt } = req.body;
+          const userEmail = req.headers['x-user-email'] as string;
+  
+          if (!process.env.GEMINI_API_KEY) {
+            return reply.status(500).send({
+              statusCode: 500,
+              error: 'Configuration Error',
+              message: 'Gemini API key is not configured',
+            });
+          }
+  
+          // ✅ CORRECT MODEL + JSON OUTPUT
+          const model = genAI.getGenerativeModel({
+            model: 'models/gemini-1.5-flash-latest',
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: 'application/json',
+            },
+          });
+  
+          const result = await model.generateContent(
+            FORM_GENERATION_PROMPT + '\n' + prompt
+          );
+  
+          const text = result.response.text();
+  
+          let formData: {
+            name: string;
+            description: string;
+            fields: any[];
+          };
+  
+          try {
+            formData = JSON.parse(text);
+          } catch (err) {
+            console.error('Invalid JSON from Gemini:', text);
+            return reply.status(500).send({
+              statusCode: 500,
+              error: 'AI Response Error',
+              message: 'Failed to parse AI-generated form JSON',
+            });
+          }
+  
+          // ✅ Validate structure
+          if (
+            !formData.name ||
+            !formData.description ||
+            !Array.isArray(formData.fields) ||
+            formData.fields.length === 0
+          ) {
+            return reply.status(500).send({
+              statusCode: 500,
+              error: 'AI Response Error',
+              message: 'AI generated an incomplete form structure',
+            });
+          }
+  
+          const positionValidation = validateFieldPositions(formData.fields);
+          if (!positionValidation.valid) {
+            return reply.status(400).send({
+              statusCode: 400,
+              error: 'Position Validation Error',
+              message: positionValidation.errors.join(', '),
+            });
+          }
+  
+          // ✅ Create form
+          const formId = uuidv4();
+          const slug = nanoid(10);
+          const formUrl = `${DOMAIN}/forms/${slug}`;
+          const urlHash = generateUrlHash(formUrl);
+  
+          const form = new FormDefinition({
+            formId,
+            slug,
+            formUrl,
+            urlHash,
+            name: formData.name,
+            description: formData.description,
+            fields: formData.fields,
+            createdBy: userEmail,
+            updatedBy: userEmail,
+            version: 1,
+          });
+  
+          await form.save();
+  
+          return reply.status(201).send({
+            status: true,
+            formId,
+            version: 1,
+            url: formUrl,
+            name: formData.name,
+          });
+        } catch (err: any) {
+          console.error('Generate form API Error:', err);
+  
+          if (err.message?.includes('API key')) {
+            return reply.status(502).send({
+              statusCode: 502,
+              error: 'Bad Gateway',
+              message: 'Failed to connect to AI service',
+            });
+          }
+  
+          return reply.status(500).send({
+            statusCode: 500,
+            error: 'Internal Server Error',
+            message: 'Failed to generate form',
+          });
+        }
+      }
+    );
 
   /**
    * ─────────────────────────────────────────

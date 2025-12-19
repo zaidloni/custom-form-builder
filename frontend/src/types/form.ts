@@ -75,6 +75,14 @@ export interface CreateFormResponse {
   url: string
 }
 
+export interface GenerateFormResponse {
+  status: boolean
+  formId: string
+  version: number
+  url: string
+  name: string
+}
+
 export interface ListFormsResponse {
   status: boolean
   forms: FormListItem[]
