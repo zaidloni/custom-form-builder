@@ -104,7 +104,7 @@ export async function formRoutes(fastify: FastifyInstance) {
 
   /**
    * ─────────────────────────────────────────
-   * PUT /api/v1/forms/:formId - Edit a form (creates new version)
+   * PUT /api/v1/forms/:formId - Edit a form (creates completely new form)
    * ─────────────────────────────────────────
    */
   fastify.put<{ Params: FormParams; Body: FormBody }>(
@@ -126,7 +126,7 @@ export async function formRoutes(fastify: FastifyInstance) {
           });
         }
 
-        // Find the latest version of this form
+        // Find the existing form to verify ownership
         const existingForm = await FormDefinition.findOne({ formId })
           .sort({ version: -1 })
           .lean();
@@ -146,29 +146,51 @@ export async function formRoutes(fastify: FastifyInstance) {
           });
         }
 
-        const newVersion = (existingForm.version as number) + 1;
+        // Generate versioned name from original form name
+        // Pattern: "FormName-N" where N is the version number
+        const originalName = existingForm.name as string;
+        const versionMatch = originalName.match(/^(.+)-(\d+)$/);
+        let versionedName: string;
+        let newVersion: number;
+        
+        if (versionMatch) {
+          // Already has version suffix, increment it
+          const baseName = versionMatch[1];
+          const currentVersion = parseInt(versionMatch[2], 10);
+          newVersion = currentVersion + 1;
+          versionedName = `${baseName}-${newVersion}`;
+        } else {
+          // No version suffix, this is version 1, new form is version 2
+          newVersion = 2;
+          versionedName = `${originalName}-${newVersion}`;
+        }
 
-        // Create new version document (preserve urlHash from existing form)
+        // Create a completely new form with new identifiers
+        const newFormId = uuidv4();
+        const newSlug = nanoid(10);
+        const newFormUrl = `${DOMAIN}/forms/${newSlug}`;
+        const newUrlHash = generateUrlHash(newFormUrl);
+
         const newForm = new FormDefinition({
-          formId: existingForm.formId,
-          slug: existingForm.slug,
-          formUrl: existingForm.formUrl,
-          urlHash: existingForm.urlHash,
-          name,
+          formId: newFormId,
+          slug: newSlug,
+          formUrl: newFormUrl,
+          urlHash: newUrlHash,
+          name: versionedName,
           description,
           fields,
-          createdBy: existingForm.createdBy,
+          createdBy: userEmail,
           updatedBy: userEmail,
-          version: newVersion,
+          version: 1,
         });
 
         await newForm.save();
 
         return reply.status(200).send({
           status: true,
-          formId: existingForm.formId,
-          version: newVersion,
-          url: existingForm.formUrl,
+          formId: newFormId,
+          version: 1,
+          url: newFormUrl,
         });
       } catch (err) {
         console.error('Edit form API Error:', err);

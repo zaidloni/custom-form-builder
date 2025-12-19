@@ -20,7 +20,6 @@ import type { Submission, FormField } from '@/types/form'
 import {
   ArrowLeft,
   Download,
-  Search,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -36,7 +35,6 @@ export default function Submissions() {
   const [page, setPage] = useState(1)
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null)
 
   // Fetch form details to get field definitions
@@ -66,14 +64,7 @@ export default function Submissions() {
     enabled: !!formId && !!userEmail,
   })
 
-  // Filter submissions by search query (client-side)
-  const filteredSubmissions = submissionsData?.submissions.filter((submission) => {
-    if (!searchQuery) return true
-    const searchLower = searchQuery.toLowerCase()
-    return Object.values(submission.data).some((value) =>
-      String(value).toLowerCase().includes(searchLower)
-    )
-  }) || []
+  const submissions = submissionsData?.submissions || []
 
   const handleExport = async () => {
     try {
@@ -134,15 +125,6 @@ export default function Submissions() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-6 animate-slide-up stagger-1">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search submissions..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-muted-foreground" />
           <div className="flex items-center gap-2">
@@ -201,19 +183,17 @@ export default function Submissions() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredSubmissions.length === 0 ? (
+              {submissions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={(formData?.fields.length || 0) + 3}
                     className="px-4 py-12 text-center text-muted-foreground"
                   >
-                    {searchQuery
-                      ? 'No submissions match your search'
-                      : 'No submissions yet'}
+                    No submissions yet
                   </td>
                 </tr>
               ) : (
-                filteredSubmissions.map((submission) => {
+                submissions.map((submission) => {
                   console.log('[FE Submissions] submission.data:', submission.data)
                   console.log('[FE Submissions] formData.fields:', formData?.fields.map(f => ({ label: f.label, key: generateFieldKey(f.label) })))
                   return (

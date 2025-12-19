@@ -93,12 +93,39 @@ function groupPositionsByRow(positions: string[]): Map<string, number[]> {
  * Validates that each row follows contiguity rules:
  * - Must start at column 1
  * - No gaps between columns
+ * - Rows must be contiguous (can't have B without A, can't have C without A and B)
  * @param rowGroups - Map of row letter to sorted array of column numbers
  * @returns Array of error messages
  */
 function validateRowContiguity(rowGroups: Map<string, number[]>): string[] {
     const errors: string[] = [];
 
+    // Get all row letters and sort them
+    const rows = Array.from(rowGroups.keys()).sort();
+
+    // Validate row-level contiguity (rows must start from A and be contiguous)
+    if (rows.length > 0) {
+        // First row must be 'A'
+        if (rows[0] !== 'A') {
+            errors.push(
+                `Rows must start from A. Found first row: ${rows[0]}. ` +
+                `Add row A or adjust field positions.`
+            );
+        }
+
+        // Check for gaps between rows
+        for (let i = 1; i < rows.length; i++) {
+            const expectedRow = String.fromCharCode(rows[i - 1].charCodeAt(0) + 1);
+            if (rows[i] !== expectedRow) {
+                errors.push(
+                    `Gap in rows: missing row ${expectedRow}. ` +
+                    `Rows must be contiguous (found row ${rows[i - 1]} and row ${rows[i]}).`
+                );
+            }
+        }
+    }
+
+    // Validate column contiguity within each row
     for (const [row, cols] of rowGroups) {
         // Check if row starts at column 1
         if (cols[0] !== 1) {
