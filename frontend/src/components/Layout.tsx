@@ -1,17 +1,44 @@
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '@/contexts/AuthContext'
-import { Button } from '@/components/ui/button'
-import { Layers, LogOut, LayoutDashboard } from 'lucide-react'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Layers, LogOut, LayoutDashboard, Sun, Moon } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { useTheme } from '@/contexts/ThemeContext';
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <div className="flex items-center gap-2">
+      <Switch
+        aria-label="Toggle theme"
+        checked={theme === 'dark'}
+        onChange={() => toggleTheme()}
+      />
+      <div
+        className="flex items-center gap-1 text-sm text-muted-foreground font-mono"
+        title={theme === 'dark' ? 'Dark' : 'Light'}>
+        {theme === 'dark' ? (
+          <Moon className="w-4 h-4" />
+        ) : (
+          <Sun className="w-4 h-4" />
+        )}
+        <span className="hidden sm:inline">
+          {theme === 'dark' ? 'Dark' : 'Light'}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export function Layout() {
-  const { userEmail, logout } = useAuth()
-  const location = useLocation()
-  const navigate = useNavigate()
+  const { userEmail, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -30,20 +57,29 @@ export function Layout() {
           <nav className="flex items-center gap-4">
             <Link to="/dashboard">
               <Button
-                variant={location.pathname === '/dashboard' ? 'secondary' : 'ghost'}
+                variant={
+                  location.pathname === '/dashboard' ? 'secondary' : 'ghost'
+                }
                 size="sm"
-                className="gap-2"
-              >
+                className="gap-2">
                 <LayoutDashboard className="w-4 h-4" />
                 Dashboard
               </Button>
             </Link>
 
             <div className="flex items-center gap-3 pl-4 border-l">
+              {/* Theme toggle */}
+              <div className="mr-2">
+                <ThemeToggle />
+              </div>
               <span className="text-sm text-muted-foreground font-mono">
                 {userEmail}
               </span>
-              <Button variant="ghost" size="icon" onClick={handleLogout} title="Logout">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                title="Logout">
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -56,6 +92,5 @@ export function Layout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }
-

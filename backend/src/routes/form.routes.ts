@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { nanoid } from 'nanoid';
 import { v4 as uuidv4 } from 'uuid';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { authorize } from '../middlewares/authorize';
 import {
   createFormSchema,
@@ -47,7 +47,7 @@ interface GenerateFormBody {
 }
 
 // Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 // Optimized prompt template for form generation
 const FORM_GENERATION_PROMPT = `Generate a JSON form definition. Rules:
@@ -169,20 +169,17 @@ export async function formRoutes(fastify: FastifyInstance) {
             });
           }
   
-          // ✅ CORRECT MODEL + JSON OUTPUT
-          const model = genAI.getGenerativeModel({
-            model: 'models/gemini-1.5-flash-latest',
-            generationConfig: {
+          // ✅ Using new @google/genai API with gemini-2.5-flash
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: FORM_GENERATION_PROMPT + '\n' + prompt,
+            config: {
               temperature: 0.2,
               responseMimeType: 'application/json',
             },
           });
   
-          const result = await model.generateContent(
-            FORM_GENERATION_PROMPT + '\n' + prompt
-          );
-  
-          const text = result.response.text();
+          const text = response.text ?? '';
   
           let formData: {
             name: string;
